@@ -29,9 +29,9 @@ int gaussian_int(int mean)
 void plot_variables(std::vector<std::vector<int>> population, std::vector<std::vector<int>> average_health,
 	std::vector<std::vector<int>> average_speed)
 {
-	Gnuplot gp("\"C:\\Program Files\\gnuplot\\bin\\gnuplot.exe\"");
-	Gnuplot gp2("\"C:\\Program Files\\gnuplot\\bin\\gnuplot.exe\"");
-	Gnuplot gp3("\"C:\\Program Files\\gnuplot\\bin\\gnuplot.exe\"");
+	Gnuplot gp;
+	Gnuplot gp2;
+	Gnuplot gp3;
 
 	gp << "set title 'Creature number vs generation'\n";
 	gp << "set ylabel 'Creatures'\n";

@@ -14,7 +14,6 @@ The code asks the user for an initial distribution of creatures and simulates th
 
 int main()
 {
-	std::cout<<"AAA"<<std::endl;
 	 std::vector<std::vector<std::vector<int>>> variables{ event_loop() };
 	plot_variables(variables[0], variables[1], variables[2]);
 	

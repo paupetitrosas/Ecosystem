@@ -1,24 +1,21 @@
-# Compiler
 CXX := g++
-CXXFLAGS := -std=c++17 -L/usr/X11R6/lib -lm -lpthread -lX11 -lboost_iostreams -L/usr/include/boost
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -pedantic
+LDFLAGS :=
+LDLIBS := -lX11 -lpthread -lm -lboost_iostreams
 
-# Source files
 SRCS := main.cpp foodchain.cpp utilities.cpp
-
-# Object files
 OBJS := $(SRCS:.cpp=.o)
+TARGET := ecosystem
 
-# Executable
-TARGET := myprogram
+.PHONY: all clean
 
-# Build rule
+all: $(TARGET)
+
 $(TARGET): $(OBJS)
-	$(CXX) $(OBJS) -o $(TARGET) $(CXXFLAGS)
+	$(CXX) $(OBJS) -o $@ $(LDFLAGS) $(LDLIBS)
 
-# Object file rule
 %.o: %.cpp
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean rule
 clean:
 	rm -f $(OBJS) $(TARGET)

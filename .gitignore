@@ -1,0 +1,8 @@
+*.o
+*.out
+*.exe
+
+ecosystem
+myprogram
+
+.DS_Store

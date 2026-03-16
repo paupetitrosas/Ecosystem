@@ -1,14 +1,7 @@
-// PHYS 30762 Final Assignement C++ 
-// Student ID: 10457059
-// April 2022
-
-/* 
----------------------------------------------------------------------------------------------------------
-The code asks the user for an initial distribution of creatures and simulates the evolution of the
- ecosystem. Then, it plots the evolution on the number of creatures, average health and average speed
- of each specie.
- --------------------------------------------------------------------------------------------------------
- */
+// Entry point for the ecosystem simulation.
+//
+// The program collects an initial population, runs the simulation,
+// and then plots population, health, and speed trends.
 
 #include "foodchain.h"
 

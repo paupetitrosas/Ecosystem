@@ -1,6 +1,39 @@
 // File that contains all the definition of functions declared in the .h file
 
+#include <unordered_map>
+
 #include "foodchain.h"
+
+namespace {
+
+std::shared_ptr<creature> make_offspring(const std::shared_ptr<creature>& parent)
+{
+	switch (parent->get_id_number())
+	{
+	case 2:
+		return std::make_shared<grasshopper>(parent->get_max_health(), parent->get_speed());
+	case 3:
+		return std::make_shared<mouse>(parent->get_max_health(), parent->get_speed());
+	case 4:
+		return std::make_shared<rabbit>(parent->get_max_health(), parent->get_speed());
+	case 5:
+		return std::make_shared<frog>(parent->get_max_health(), parent->get_speed());
+	case 6:
+		return std::make_shared<bird>(parent->get_max_health(), parent->get_speed());
+	case 7:
+		return std::make_shared<snake>(parent->get_max_health(), parent->get_speed());
+	case 8:
+		return std::make_shared<fox>(parent->get_max_health(), parent->get_speed());
+	case 9:
+		return std::make_shared<hawk>(parent->get_max_health(), parent->get_speed());
+	case 10:
+		return std::make_shared<owl>(parent->get_max_health(), parent->get_speed());
+	default:
+		return nullptr;
+	}
+}
+
+}
 
 
 // Overload != operator to see if two pointers point at the same creature
@@ -806,9 +839,29 @@ bool rectangle::intersects(rectangle range)
 
 // Quadtree class
 
+std::shared_ptr<quadtree> quadtree::child_for_point(std::pair<int, int> point)
+{
+	const int x = boundary.get_x();
+	const int y = boundary.get_y();
+
+	if (point.first <= x)
+	{
+		if (point.second <= y)
+			return topleft;
+		return bottomleft;
+	}
+
+	if (point.second <= y)
+		return topright;
+	return bottomright;
+}
+
 // Function to split the quadtree in four sons
 void quadtree::split()
 {
+	if (!can_split())
+		return;
+
 	int x{ boundary.get_x() };
 	int y{ boundary.get_y() };
 	int w{ boundary.get_width() };
@@ -834,6 +887,21 @@ void quadtree::split()
 
 	// Update the variable has divided to true
 	has_divided = true;
+
+	std::vector<std::shared_ptr<creature>> retained_points;
+	retained_points.reserve(points.size());
+
+	for (const auto& point : points)
+	{
+		std::shared_ptr<quadtree> child = child_for_point(point->get_position());
+
+		if (child != nullptr && child->boundary.contains_point(point->get_position()))
+			child->insert(point);
+		else
+			retained_points.push_back(point);
+	}
+
+	points = retained_points;
 }
 
 // Function to insert points in the quadtree
@@ -843,60 +911,56 @@ void quadtree::insert(std::shared_ptr<creature> point)
 	if (!boundary.contains_point(point->get_position()))
 		return;
 
-	// Check the quadtree is not full and store the point if it is not
-	if (points.size() < capacity)
+	if (has_divided)
+	{
+		std::shared_ptr<quadtree> child = child_for_point(point->get_position());
+		if (child != nullptr && child->boundary.contains_point(point->get_position()))
+			child->insert(point);
+		else
+			points.push_back(point);
+		return;
+	}
+
+	// Keep points in the current node if it still has room or the region can no longer split.
+	if (points.size() < capacity || !can_split())
 		points.push_back(point);
 
 	// If it is full, check if it has already divided. If it has not, divide the quadtree. If it
 	// already has, use recursion to insert the point to one of the sons of the quadtree.
 	else
 	{
-		if (has_divided == false)
-		{
-			split();
-		}
-		topleft->insert(point);
-		topright->insert(point);
-		bottomleft->insert(point);
-		bottomright->insert(point);
+		split();
+
+		std::shared_ptr<quadtree> child = child_for_point(point->get_position());
+		if (child != nullptr && child->boundary.contains_point(point->get_position()))
+			child->insert(point);
+		else
+			points.push_back(point);
 
 	}
 }
 
 // Function to look for points that are in the same branch of the quadtree
-std::vector<std::shared_ptr<creature>> quadtree::query(rectangle range,
-	std::vector<std::shared_ptr<creature>> found)
+void quadtree::query(rectangle range, std::vector<std::shared_ptr<creature>>& found)
 {
 	// Check that the range is inside the boundary. If it is not, return an empty array
 	if (!range.intersects(boundary))
-	{
-		std::vector<std::shared_ptr<creature>> cr;
-		return cr;
-	}
+		return;
 
 	// If it is inside, push back the points and check if it has other quadtrees inside
-	else
+	for (int i{}; i < points.size(); i++)
 	{
-		for (int i{}; i < points.size(); i++)
-		{
-			if (range.contains_point(points[i]->get_position()))
-				found.push_back(points[i]);
-		}
-		if (has_divided)
-		{
-			std::vector<std::shared_ptr<creature>> a{ topleft->query(range, found) };
-			std::vector<std::shared_ptr<creature>> b{ topright->query(range, found) };
-			std::vector<std::shared_ptr<creature>> c{ bottomleft->query(range, found) };
-			std::vector<std::shared_ptr<creature>> d{ bottomright->query(range, found) };
-
-			// Concatanate the points of the sons of the quadtree
-			found.insert(found.begin(), a.begin(), a.end());
-			found.insert(found.begin(), b.begin(), b.end());
-			found.insert(found.begin(), c.begin(), c.end());
-			found.insert(found.begin(), d.begin(), d.end());
-		}
+		if (range.contains_point(points[i]->get_position()))
+			found.push_back(points[i]);
 	}
-	return found;
+
+	if (has_divided)
+	{
+		topleft->query(range, found);
+		topright->query(range, found);
+		bottomleft->query(range, found);
+		bottomright->query(range, found);
+	}
 }
 
 // Function to draw the quadtree, mainly used for debugging purposes, even though it can be
@@ -1006,198 +1070,111 @@ cimg_library::CImg<unsigned char> ecosystem::display(cimg_library::CImg<unsigned
 
 // Function to make intersecting creatures reproduce or kill each other. It uses the quadtree
 // method to iterate for all the creatures
-std::vector<std::shared_ptr<creature>> ecosystem::reproduce(quadtree qdtree)
+std::vector<std::shared_ptr<creature>> ecosystem::reproduce(quadtree& qdtree)
 {
 	// Initialize vector for the new generation creatures and reserve memory for it
 	std::vector<std::shared_ptr<creature>> new_creatures;
-	new_creatures.reserve(creatures.size());
+	new_creatures.reserve(creatures.size() * 2);
 
-	// Create an empty vector to use to query
-	std::vector<std::shared_ptr<creature>> vector;
-	std::vector< bool> existing_creatures;
+	std::unordered_map<creature*, std::size_t> creature_indices;
+	creature_indices.reserve(creatures.size());
 
-	for (int i{}; i < creatures.size(); i++)
-	{
-		existing_creatures.push_back(true);
-	}
+	for (std::size_t i{}; i < creatures.size(); ++i)
+		creature_indices.emplace(creatures[i].get(), i);
+
+	std::vector<bool> existing_creatures(creatures.size(), true);
+	std::vector<bool> should_reproduce(creatures.size(), false);
+	std::vector<bool> has_eaten(creatures.size(), false);
 
 	// Check if any creature needs to die or reproduce. It will look for points in the same
 	// quadtree and then check if those points intersect
-	for (int i{}; i < creatures.size(); i++)
+	for (std::size_t i{}; i < creatures.size(); ++i)
 	{
+		if (!existing_creatures[i])
+			continue;
+
 		std::pair<int,int> position{ creatures[i]->get_position() };
 		int creature_id{ creatures[i]->get_id_number() };
 		std::vector<int> eats{ creatures[i]->get_eats() };
 
-		rectangle range(position.first, position.second, creature_width, creature_height);
-		std::vector<std::shared_ptr<creature>> subgroup_creatures{ qdtree.query(range, vector) };
-
-		bool should_die{ false };
-		bool new_grasshopper{ false };
-		bool new_mouse{ false };
-		bool new_rabbit{ false };
-		bool new_frog{ false };
-		bool new_bird{ false };
-		bool new_snake{ false };
-		bool new_fox{ false };
-		bool new_hawk{ false };
-		bool new_owl{ false };
-		bool has_eaten{ false };
+		rectangle range(position.first, position.second, creature_width * 2, creature_height * 2);
+		std::vector<std::shared_ptr<creature>> subgroup_creatures;
+		qdtree.query(range, subgroup_creatures);
+		rectangle creature_range(position.first, position.second, creature_width, creature_height);
 
 		// If there are creatures found, check if they intersect 
 		if (!subgroup_creatures.empty())
 		{
-			for (int j{}; j < subgroup_creatures.size(); j++)
+			for (const auto& other_creature : subgroup_creatures)
 			{
-				int x{ subgroup_creatures[j]->get_position().first };
-				int y{ subgroup_creatures[j]->get_position().second };
-				int creature_id_2{ subgroup_creatures[j]->get_id_number() };
+				const auto index_it = creature_indices.find(other_creature.get());
+				if (index_it == creature_indices.end())
+					continue;
 
-				std::vector<int> eats_2{ subgroup_creatures[j]->get_eats() };
+				const std::size_t other_index = index_it->second;
+				if (other_index == i || !existing_creatures[i] || !existing_creatures[other_index])
+					continue;
 
-				rectangle creature_range(x, y, creature_width, creature_height);
+				int x{ other_creature->get_position().first };
+				int y{ other_creature->get_position().second };
+				int creature_id_2{ other_creature->get_id_number() };
+				std::vector<int> eats_2{ other_creature->get_eats() };
 
-				rectangle creature_range_2(position.first, position.second, 
-					creature_width, creature_height);
+				rectangle other_creature_range(x, y, creature_width, creature_height);
 
-				// Check if they intersect, making sure we are not cheking a creature with itself
-				if (creature_range.intersects(creature_range_2) && creatures[i] != subgroup_creatures[j]
-					&& existing_creatures[i])
+				if (!creature_range.intersects(other_creature_range))
+					continue;
+
+				// Check if they are the same type of creature
+				if (creature_id == creature_id_2)
 				{
-					// Check if they are the same type of creature
-					if (creature_id == creature_id_2)
-					{
-						if (creature_id == 2)
-							new_grasshopper = true;
-						if (creature_id == 3)
-							new_mouse = true;
-						if (creature_id == 4)
-							new_rabbit = true;
-						if (creature_id == 5)
-							new_frog = true;
-						if (creature_id == 6)
-							new_bird = true;
-						if (creature_id == 7)
-							new_snake = true;
-						if (creature_id == 8)
-							new_fox = true;
-						if (creature_id == 9)
-							new_hawk = true;
-						if (creature_id == 10)
-							new_owl = true;
-						should_die = true;
-						std::replace(existing_creatures.begin() + i, existing_creatures.begin() + i,
-							true, false);
-					}
-					else
-					{
-						// Check if the creature[i] eats the other creature
-						if (std::find(eats.begin(), eats.end(), creature_id_2) != eats.end())
-						{
-							if (creatures[i]->get_speed() > subgroup_creatures[j]->get_speed())
-							{
-								has_eaten = true;
-								creatures[i]->set_health(creatures[i]->get_max_health());
-								if (creature_id == 2)
-									new_grasshopper = true;
-								if (creature_id == 3)
-									new_mouse = true;
-								if (creature_id == 4)
-									new_rabbit = true;
-								if (creature_id == 5)
-									new_frog = true;
-								if (creature_id == 6)
-									new_bird = true;
-								if (creature_id == 7)
-									new_snake = true;
-								if (creature_id == 8)
-									new_fox = true;
-								if (creature_id == 9)
-									new_hawk = true;
-								if (creature_id == 10)
-									new_owl = true;
-							}
-						}
-						// Check if the creature[j] is eaten by the other creature
-						if (std::find(eats_2.begin(), eats_2.end(), creature_id) != eats_2.end())
-						{
-							if (creatures[i]->get_speed() < subgroup_creatures[j]->get_speed())
-							{
-								should_die = true;
-								std::replace(existing_creatures.begin() + i, existing_creatures.begin() + i,
-									true, false);
-							}
-						}
-					}
-
+					should_reproduce[i] = true;
+					should_reproduce[other_index] = true;
+					existing_creatures[i] = false;
+					existing_creatures[other_index] = false;
+					break;
 				}
-				if (j == (subgroup_creatures.size() - 1))
+
+				// Check if the creature[i] eats the other creature
+				if (std::find(eats.begin(), eats.end(), creature_id_2) != eats.end())
 				{
-					// Create the new creatures and don't push back the ones that
-					// didn't make it
-					creatures[i]->has_eaten_push_data(has_eaten);
-					if (!should_die)
-						new_creatures.push_back(creatures[i]);
-					if (new_grasshopper)
+					if (creatures[i]->get_speed() > other_creature->get_speed())
 					{
-						std::shared_ptr<creature> new_gh(new grasshopper(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_gh);
+						has_eaten[i] = true;
+						creatures[i]->set_health(creatures[i]->get_max_health());
+						should_reproduce[i] = true;
+						existing_creatures[other_index] = false;
+						continue;
 					}
-					if (new_mouse)
+				}
+
+				// Check if the creature[i] is eaten by the other creature
+				if (std::find(eats_2.begin(), eats_2.end(), creature_id) != eats_2.end())
+				{
+					if (creatures[i]->get_speed() < other_creature->get_speed())
 					{
-						std::shared_ptr<creature> new_mouse(new mouse(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_mouse);
-					}
-					if (new_rabbit)
-					{
-						std::shared_ptr<creature> new_rb(new rabbit(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_rb);
-					}
-					if (new_frog)
-					{
-						std::shared_ptr<creature> new_frog(new frog(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_frog);
-					}
-					if (new_bird)
-					{
-						std::shared_ptr<creature> new_bird(new bird(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_bird);
-					}
-					if (new_snake)
-					{
-						std::shared_ptr<creature> new_snake(new snake(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_snake);
-					}
-					if (new_fox)
-					{
-						std::shared_ptr<creature> new_fox(new fox(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_fox);
-					}
-					if (new_hawk)
-					{
-						std::shared_ptr<creature> new_hawk(new hawk(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_hawk);
-					}
-					if (new_owl)
-					{
-						std::shared_ptr<creature> new_owl(new owl(creatures[i]->get_max_health(),
-							creatures[i]->get_speed()));
-						new_creatures.push_back(new_owl);
+						has_eaten[other_index] = true;
+						creatures[other_index]->set_health(creatures[other_index]->get_max_health());
+						should_reproduce[other_index] = true;
+						existing_creatures[i] = false;
+						break;
 					}
 				}
 			}
 		}
-		else
-		{
+	}
+
+	for (std::size_t i{}; i < creatures.size(); ++i)
+	{
+		creatures[i]->has_eaten_push_data(has_eaten[i]);
+		if (existing_creatures[i])
 			new_creatures.push_back(creatures[i]);
+
+		if (should_reproduce[i])
+		{
+			std::shared_ptr<creature> new_creature = make_offspring(creatures[i]);
+			if (new_creature != nullptr)
+				new_creatures.push_back(new_creature);
 		}
 	}
 	return new_creatures;
@@ -1207,7 +1184,8 @@ std::vector<std::shared_ptr<creature>> ecosystem::reproduce(quadtree qdtree)
 // that is inserted in the quadtree
 quadtree ecosystem::create_tree()
 {
-	rectangle boundary(0, 0, screen_width, screen_height);
+	rectangle boundary(screen_width / 2, screen_height / 2,
+		screen_width / 2 + 1, screen_height / 2 + 1);
 	quadtree qdtree(boundary);
 
 	for (int i{}; i < creatures.size(); i++)
@@ -1227,12 +1205,11 @@ void ecosystem::plant_generation()
 	{
 		for (int i{}; i < deaths; i++)
 		{
-			//int probability{ uniform_int(1,2) };
-			int probability{ 2 };
+			int probability{ uniform_int(1,2) };
 
 			if (probability == 2)
 			{
-				std::shared_ptr<creature> new_plants(new plant());
+				std::shared_ptr<creature> new_plants(std::make_shared<plant>());
 				creatures.push_back(new_plants);
 			}
 

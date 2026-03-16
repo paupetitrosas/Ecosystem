@@ -600,11 +600,12 @@ public:
 	quadtree(rectangle rec) { boundary = rec; }
 	~quadtree() { points.clear(); }
 
+	bool can_split() { return boundary.get_width() > 1 && boundary.get_height() > 1; }
+	std::shared_ptr<quadtree> child_for_point(std::pair<int, int> point);
 	void split();
 	void insert(std::shared_ptr<creature> point);
 
-	std::vector<std::shared_ptr<creature>> query(rectangle range,
-		std::vector<std::shared_ptr<creature>> found);
+	void query(rectangle range, std::vector<std::shared_ptr<creature>>& found);
 
 	cimg_library::CImg<unsigned char> show(cimg_library::CImg<unsigned char> image);
 };
@@ -628,7 +629,7 @@ public:
 	cimg_library::CImg<unsigned char> display(cimg_library::CImg<unsigned char> image);
 	cimg_library::CImg<unsigned char> draw_text(cimg_library::CImg<unsigned char> image);
 
-	std::vector<std::shared_ptr<creature>> reproduce(quadtree qdtree);
+	std::vector<std::shared_ptr<creature>> reproduce(quadtree& qdtree);
 	int num_creature(int id);
 
 	quadtree create_tree();

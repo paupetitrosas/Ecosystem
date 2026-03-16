@@ -2,120 +2,126 @@
 
 #include <random>
 #include <chrono>
+#include <array>
+#include <filesystem>
 #include "gnuplot-iostream.h"
 #include "CImg.h"
 #include "utilities.h"
 
-// Function that returns a random integer between a range. It follows a uniform distribution
-	int uniform_int(int initial_range, int final_range)
+namespace {
+
+std::mt19937& random_generator()
+{
+	static std::mt19937 generator(std::random_device{}());
+	return generator;
+}
+
+const std::array<std::string, 10> species_names{
+	"Plants", "Grasshoppers", "Mice", "Rabbits", "Frogs",
+	"Birds", "Snakes", "Foxes", "Hawks", "Owls"
+};
+
+const std::array<std::string, 10> species_colors{
+	"#A9E190", "#4E6151", "#808080", "#7F4F24", "#297045",
+	"#CCCC00", "#1C3628", "#FC9E4F", "#66151D", "#7987F4"
+};
+
+void configure_plot(Gnuplot& gp, const std::string& output_path, const std::string& title,
+	const std::string& y_label, std::size_t series_count, std::size_t species_offset)
+{
+	gp << "set terminal pngcairo enhanced size 1600,900 font 'DejaVu Sans,12'\n";
+	gp << "set output '" << output_path << "'\n";
+	gp << "set title '" << title << "' tc rgb '#1F2937' font ',18'\n";
+	gp << "set xlabel 'Generation' tc rgb '#374151'\n";
+	gp << "set ylabel '" << y_label << "' tc rgb '#374151'\n";
+	gp << "set key outside right top box opaque width 2 textcolor rgb '#374151'\n";
+	gp << "set border lw 1.4 lc rgb '#9CA3AF'\n";
+	gp << "set tics textcolor rgb '#4B5563'\n";
+	gp << "set grid xtics ytics lc rgb '#D8D2C6' lw 1\n";
+	gp << "set lmargin 10\n";
+	gp << "set rmargin 26\n";
+	gp << "set tmargin 3\n";
+	gp << "set bmargin 5\n";
+	gp << "set yrange [0:*]\n";
+	gp << "set object 1 rectangle from screen 0,0 to screen 1,1 "
+		<< "fillcolor rgb '#FBF8F1' fillstyle solid 1.0 noborder behind\n";
+	gp << "set object 2 rectangle from graph 0,0 to graph 1,1 "
+		<< "fillcolor rgb '#F5EFE4' fillstyle solid 1.0 noborder behind\n";
+
+	for (std::size_t i{}; i < series_count; ++i)
 	{
-		std::random_device dev;
-		std::mt19937 rng(dev());
-		std::uniform_int_distribution<std::mt19937::result_type> dist(initial_range, final_range);
-		return dist(rng);
+		gp << "set style line " << (i + 1)
+			<< " lc rgb '" << species_colors[i + species_offset]
+			<< "' lw 2.8\n";
 	}
+}
+
+template <std::size_t N>
+void plot_series(Gnuplot& gp, const std::array<std::string, N>& labels,
+	const std::vector<std::vector<int>>& values, std::size_t species_offset = 0)
+{
+	gp << "plot ";
+
+	for (std::size_t i{}; i < values.size(); ++i)
+	{
+		gp << "'-' with lines ls " << (i + 1) << " title '" << labels[i + species_offset] << "'";
+		if (i + 1 != values.size())
+			gp << ", ";
+	}
+	gp << "\n";
+
+	for (const auto& dataset : values)
+		gp.send(dataset);
+
+	gp << "unset output\n";
+}
+
+}
+
+// Function that returns a random integer between a range. It follows a uniform distribution
+int uniform_int(int initial_range, int final_range)
+{
+	std::uniform_int_distribution<int> dist(initial_range, final_range);
+	return dist(random_generator());
+}
 
 // Function that returns a random integer between a range, where the input is the mean
 // It follows a gaussian distribution
 int gaussian_int(int mean)
 {
-	std::random_device dev;
-	std::mt19937 rng(dev());
 	std::normal_distribution<double> dist(mean, 3);
-	return dist(rng);
+	return static_cast<int>(dist(random_generator()));
 }
 
 // Function to plot the three variables and display them in a new window
 void plot_variables(std::vector<std::vector<int>> population, std::vector<std::vector<int>> average_health,
 	std::vector<std::vector<int>> average_speed)
 {
+	std::filesystem::create_directories("plots");
+
+	const std::string population_plot{ "plots/population_vs_generation.png" };
+	const std::string health_plot{ "plots/average_health_vs_generation.png" };
+	const std::string speed_plot{ "plots/average_speed_vs_generation.png" };
+
 	Gnuplot gp;
 	Gnuplot gp2;
 	Gnuplot gp3;
 
-	gp << "set title 'Creature number vs generation'\n";
-	gp << "set ylabel 'Creatures'\n";
-	gp << "set xlabel 'Generation'\n";
+	configure_plot(gp, population_plot, "Population by Species", "Creatures", population.size(), 0);
+	plot_series(gp, species_names, population);
 
-	gp << "plot '-' title 'Plants' with lines lc '#A9E190',"
-		<< "'-' title 'Grasshoppers' with lines lc '#4E6151',"
-		<< "'-' title 'Mice' with lines lc '#808080',"
-		<< "'-' title 'Rabbits' with lines  lc '#7F4F24',"
-		<< "'-' title 'Frogs' with lines lc '#297045',"
-		<< "'-' title 'Birds' with lines lc '#CCCC00',"
-		<< "'-' title 'Snakes' with lines lc '#1C3628',"
-		<< "'-' title 'Foxes' with lines lc '#FC9E4F',"
-		<< "'-' title 'Hawks' with lines lc '#66151D',"
-		<< "'-' title 'Owls' with lines lc '#7987F4'\n";
+	configure_plot(gp2, health_plot, "Average Maximum Health by Species", "Average Max Health",
+		average_health.size(), 1);
+	plot_series(gp2, species_names, average_health, 1);
 
-	// Hardcoded, instead of using a for loop, to ensure the
-	// gnuplot machine recognizes it
-	gp.send(population[0]);
-	gp.send(population[1]);
-	gp.send(population[2]);
-	gp.send(population[3]);
-	gp.send(population[4]);
-	gp.send(population[5]);
-	gp.send(population[6]);
-	gp.send(population[7]);
-	gp.send(population[8]);
-	gp.send(population[9]);
+	configure_plot(gp3, speed_plot, "Average Speed by Species", "Average Speed",
+		average_speed.size(), 1);
+	plot_series(gp3, species_names, average_speed, 1);
 
-
-	gp2 << "set title 'Avergae health vs generation'\n";
-	gp2 << "set ylabel 'Average max health'\n";
-	gp2 << "set xlabel 'Generation'\n";
-	gp2 << "plot '-' title 'Grasshoppers' with lines lc '#4E6151',"
-		<< "'-' title 'Mice' with lines lc '#808080',"
-		<< "'-' title 'Rabbits' with lines  lc '#7F4F24',"
-		<< "'-' title 'Frogs' with lines lc '#297045',"
-		<< "'-' title 'Birds' with lines lc '#CCCC00',"
-		<< "'-' title 'Snakes' with lines lc '#1C3628',"
-		<< "'-' title 'Foxes' with lines lc '#FC9E4F',"
-		<< "'-' title 'Hawks' with lines lc '#66151D',"
-		<< "'-' title 'Owls' with lines lc '#7987F4'\n";
-
-	// Hardcoded, instead of using a for loop, to ensure the
-	// gnuplot machine recognizes it
-	gp2.send(average_health[0]);
-	gp2.send(average_health[1]);
-	gp2.send(average_health[2]);
-	gp2.send(average_health[3]);
-	gp2.send(average_health[4]);
-	gp2.send(average_health[5]);
-	gp2.send(average_health[6]);
-	gp2.send(average_health[7]);
-	gp2.send(average_health[8]);
-
-
-	gp3 << "set title 'Average speed vs generation'\n";
-	gp3 << "set xlabel 'Generation'\n";
-	gp3 << "set ylabel 'Average speed'\n";
-	gp3 << "plot '-' title 'Grasshoppers' with lines lc '#4E6151',"
-		<< "'-' title 'Mice' with lines lc '#808080',"
-		<< "'-' title 'Rabbits' with lines  lc '#7F4F24',"
-		<< "'-' title 'Frogs' with lines lc '#297045',"
-		<< "'-' title 'Birds' with lines lc '#CCCC00',"
-		<< "'-' title 'Snakes' with lines lc '#1C3628',"
-		<< "'-' title 'Foxes' with lines lc '#FC9E4F',"
-		<< "'-' title 'Hawks' with lines lc '#66151D',"
-		<< "'-' title 'Owls' with lines lc '#7987F4'\n";
-
-	// Hardcoded, instead of using a for loop, to ensure the
-	// gnuplot machine recognizes it
-	gp3.send(average_speed[0]);
-	gp3.send(average_speed[1]);
-	gp3.send(average_speed[2]);
-	gp3.send(average_speed[3]);
-	gp3.send(average_speed[4]);
-	gp3.send(average_speed[5]);
-	gp3.send(average_speed[6]);
-	gp3.send(average_speed[7]);
-	gp3.send(average_speed[8]);
-
-	// Ask for an input to ensure the prgram doesn't close right after plotting the variables
-	int a;
-	std::cin >> a;
+	std::cout << "Saved plots to:" << std::endl;
+	std::cout << "  " << population_plot << std::endl;
+	std::cout << "  " << health_plot << std::endl;
+	std::cout << "  " << speed_plot << std::endl;
 }
 
 // Function to put together a string with an integer, using the namspace patch
@@ -188,8 +194,7 @@ cimg_library::CImg<unsigned char> game_over(cimg_library::CImg<unsigned char> im
 std::vector<std::vector<std::vector<int>>> event_loop()
 {
 	// Ask the user for inputs
-	int i{};
-	std::vector<int> inputs{ check_input(i) };
+	std::vector<int> inputs{ check_input() };
 
 	// Initialize the ecosystem with the amount of creatures desired
 	ecosystem eco(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5],

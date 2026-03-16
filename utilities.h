@@ -35,11 +35,10 @@ namespace patch
 	}
 }
 
-// Template to check for valid inputs
-template <typename T>
-std::vector<int> check_input(T model_input)
+// Check the initial population input for each species.
+inline std::vector<int> check_input()
 {
-	T input;
+	int input{};
 	std::vector<int> vector;
 	std::vector<std::string> creatures{ "Plants: ","Grasshoppers: ","Mice: ","Rabbits: ",
 		"Frogs: ","Birds: ", "Snakes: ","Foxes: ","Hawks: ", "Owls: " };
@@ -59,6 +58,12 @@ std::vector<int> check_input(T model_input)
 				std::cin.clear();
 				std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
 				std::cout << "Invalid input, please try again" << std::endl;
+			}
+			else if (input < 0)
+			{
+				std::cin.clear();
+				std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
+				std::cout << "Population counts must be zero or greater" << std::endl;
 			}
 			// if valid input then for loop breaks
 			else
